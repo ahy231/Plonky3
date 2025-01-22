@@ -1,22 +1,353 @@
 //! The scalar field of the BN254 curve, defined as `F_r` where `r = 21888242871839275222246405745257275088548364400416034343698204186575808495617`.
+use core::fmt::Display;
+use core::iter::{Product, Sum};
+use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::arch::aarch64::{int32x4_t, uint32x4_t};
+use std::mem::transmute;
+
+use num_bigint::BigUint;
 
 mod poseidon2;
 
 use core::fmt;
-use core::fmt::{Debug, Display, Formatter};
+use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
-use core::iter::{Product, Sum};
-use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use ff::{Field as FFField, PrimeField as FFPrimeField};
 pub use halo2curves::bn256::Fr as FFBn254Fr;
 use halo2curves::serde::SerdeObject;
-use num_bigint::BigUint;
-use p3_field::{Field, FieldAlgebra, Packable, PrimeField, TwoAdicField};
+use p3_field::{
+    ExtensionField, Field, FieldAlgebra, FieldExtensionAlgebra, Packable, PrimeField, PrimeField64,
+    TwoAdicField,
+};
 pub use poseidon2::Poseidon2Bn254;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize};
+
+#[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct FakeExtension {
+    pub value: Bn254Fr,
+}
+
+impl Display for FakeExtension {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl Div<FakeExtension> for FakeExtension {
+    type Output = FakeExtension;
+
+    fn div(self, rhs: FakeExtension) -> Self::Output {
+        FakeExtension {
+            value: self.value / rhs.value,
+        }
+    }
+}
+
+impl Packable for FakeExtension {}
+
+impl Field for FakeExtension {
+    type Packing = FakeExtension;
+    const GENERATOR: Self = FakeExtension {
+        value: Bn254Fr::new(FFBn254Fr::from_raw([1, 0, 0, 0])),
+    };
+
+    fn is_zero(&self) -> bool {
+        self.value.is_zero()
+    }
+
+    fn is_one(&self) -> bool {
+        self.value.is_one()
+    }
+
+    fn try_inverse(&self) -> Option<Self> {
+        self.value.try_inverse().map(|v| FakeExtension { value: v })
+    }
+
+    fn order() -> BigUint {
+        todo!()
+    }
+
+    fn div_2exp_u64(&self, exp: u64) -> Self {
+        todo!()
+    }
+
+    fn exp_u64_generic<FA: FieldAlgebra<F = Self>>(val: FA, power: u64) -> FA {
+        todo!()
+    }
+
+    fn inverse(&self) -> Self {
+        FakeExtension {
+            value: self.value.inverse(),
+        }
+    }
+
+    fn halve(&self) -> Self {
+        FakeExtension {
+            value: self.value.div_2exp_u64(1),
+        }
+    }
+
+    fn multiplicative_group_factors() -> Vec<(BigUint, usize)> {
+        todo!()
+    }
+
+    fn bits() -> usize {
+        todo!()
+    }
+}
+
+impl FieldExtensionAlgebra<Bn254Fr> for FakeExtension {
+    const D: usize = 7;
+
+    fn from_base(b: Bn254Fr) -> Self {
+        todo!()
+    }
+
+    fn from_base_slice(bs: &[Bn254Fr]) -> Self {
+        todo!()
+    }
+
+    fn from_base_fn<F: FnMut(usize) -> Bn254Fr>(f: F) -> Self {
+        todo!()
+    }
+
+    fn from_base_iter<I: Iterator<Item = Bn254Fr>>(iter: I) -> Self {
+        todo!()
+    }
+
+    fn as_base_slice(&self) -> &[Bn254Fr] {
+        todo!()
+    }
+}
+
+impl PrimeField64 for Bn254Fr {
+    const ORDER_U64: u64 = 2;
+
+    fn as_canonical_u64(&self) -> u64 {
+        todo!()
+    }
+}
+
+impl ExtensionField<Bn254Fr> for FakeExtension {
+    type ExtensionPacking = FakeExtension;
+
+    fn is_in_basefield(&self) -> bool {
+        todo!()
+    }
+
+    fn as_base(&self) -> Option<Bn254Fr> {
+        todo!()
+    }
+
+    fn ext_powers_packed(&self) -> p3_field::Powers<Self::ExtensionPacking> {
+        todo!()
+    }
+}
+
+impl Mul<FakeExtension> for FakeExtension {
+    type Output = FakeExtension;
+
+    fn mul(self, rhs: FakeExtension) -> Self::Output {
+        FakeExtension {
+            value: self.value * rhs.value,
+        }
+    }
+}
+
+impl Sub<FakeExtension> for FakeExtension {
+    type Output = FakeExtension;
+
+    fn sub(self, rhs: FakeExtension) -> Self::Output {
+        FakeExtension {
+            value: self.value - rhs.value,
+        }
+    }
+}
+
+impl Neg for FakeExtension {
+    type Output = FakeExtension;
+
+    fn neg(self) -> Self::Output {
+        FakeExtension { value: -self.value }
+    }
+}
+
+impl Add for FakeExtension {
+    type Output = FakeExtension;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        FakeExtension {
+            value: self.value + rhs.value,
+        }
+    }
+}
+
+impl Product for FakeExtension {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.reduce(|x, y| x * y).unwrap_or(Self::ONE)
+    }
+}
+
+impl Sum for FakeExtension {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.reduce(|x, y| x + y).unwrap_or(Self::ZERO)
+    }
+}
+
+impl MulAssign<FakeExtension> for FakeExtension {
+    fn mul_assign(&mut self, rhs: FakeExtension) {
+        self.value *= rhs.value;
+    }
+}
+
+impl SubAssign<FakeExtension> for FakeExtension {
+    fn sub_assign(&mut self, rhs: FakeExtension) {
+        self.value -= rhs.value;
+    }
+}
+
+impl AddAssign<FakeExtension> for FakeExtension {
+    fn add_assign(&mut self, rhs: FakeExtension) {
+        self.value += rhs.value;
+    }
+}
+
+impl FieldAlgebra for FakeExtension {
+    type F = FakeExtension;
+
+    const ZERO: Self = FakeExtension {
+        value: Bn254Fr::ZERO,
+    };
+
+    const ONE: Self = FakeExtension {
+        value: Bn254Fr::ONE,
+    };
+
+    const TWO: Self = FakeExtension {
+        value: Bn254Fr::TWO,
+    };
+
+    const NEG_ONE: Self = FakeExtension {
+        value: Bn254Fr::NEG_ONE,
+    };
+
+    fn from_bool(b: bool) -> Self {
+        Self {
+            value: Bn254Fr::from_bool(b),
+        }
+    }
+
+    fn from_canonical_u8(n: u8) -> Self {
+        Self {
+            value: Bn254Fr::from_canonical_u8(n),
+        }
+    }
+
+    fn from_canonical_u16(n: u16) -> Self {
+        Self {
+            value: Bn254Fr::from_canonical_u16(n),
+        }
+    }
+
+    fn from_canonical_u32(n: u32) -> Self {
+        Self {
+            value: Bn254Fr::from_canonical_u32(n),
+        }
+    }
+
+    fn from_canonical_u64(n: u64) -> Self {
+        Self {
+            value: Bn254Fr::from_canonical_u64(n),
+        }
+    }
+
+    fn from_canonical_usize(n: usize) -> Self {
+        Self {
+            value: Bn254Fr::from_canonical_usize(n),
+        }
+    }
+
+    fn from_wrapped_u32(n: u32) -> Self {
+        Self {
+            value: Bn254Fr::from_wrapped_u32(n),
+        }
+    }
+
+    fn from_wrapped_u64(n: u64) -> Self {
+        Self {
+            value: Bn254Fr::from_wrapped_u64(n),
+        }
+    }
+
+    fn from_f(f: Self::F) -> Self {
+        f
+    }
+}
+
+impl MulAssign<Bn254Fr> for FakeExtension {
+    fn mul_assign(&mut self, rhs: Bn254Fr) {
+        self.value *= rhs;
+    }
+}
+
+impl Mul<Bn254Fr> for FakeExtension {
+    type Output = FakeExtension;
+
+    fn mul(self, rhs: Bn254Fr) -> Self::Output {
+        FakeExtension {
+            value: self.value * rhs,
+        }
+    }
+}
+
+impl AddAssign<Bn254Fr> for FakeExtension {
+    fn add_assign(&mut self, rhs: Bn254Fr) {
+        self.value += rhs;
+    }
+}
+
+impl Add<Bn254Fr> for FakeExtension {
+    type Output = FakeExtension;
+
+    fn add(self, rhs: Bn254Fr) -> Self::Output {
+        FakeExtension {
+            value: self.value + rhs,
+        }
+    }
+}
+
+impl SubAssign<Bn254Fr> for FakeExtension {
+    fn sub_assign(&mut self, rhs: Bn254Fr) {
+        self.value -= rhs;
+    }
+}
+
+impl Sub<Bn254Fr> for FakeExtension {
+    type Output = FakeExtension;
+
+    fn sub(self, rhs: Bn254Fr) -> Self::Output {
+        FakeExtension {
+            value: self.value - rhs,
+        }
+    }
+}
+
+impl From<Bn254Fr> for FakeExtension {
+    fn from(value: Bn254Fr) -> Self {
+        FakeExtension { value }
+    }
+}
+
+impl TwoAdicField for FakeExtension {
+    const TWO_ADICITY: usize = 27;
+
+    fn two_adic_generator(bits: usize) -> Self {
+        todo!()
+    }
+}
 
 /// The BN254 curve scalar field prime, defined as `F_r` where `r = 21888242871839275222246405745257275088548364400416034343698204186575808495617`.
 #[derive(Copy, Clone, Default, Eq, PartialEq)]

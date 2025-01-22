@@ -8,9 +8,15 @@ license = "MIT OR Apache-2.0"
 p3-field.workspace = true
 p3-poseidon2.workspace = true
 p3-symmetric.workspace = true
-
-ff = { workspace = true, features = ["derive", "derive_bits"] }
+p3-util.workspace = true
+p3-maybe-rayon.workspace = true
+p3-monty-31.workspace = true
 num-bigint.workspace = true
+num-traits.workspace = true
+num-integer.workspace = true
+nums.workspace = true
+tracing.workspace = true
+ff = { workspace = true, features = ["derive", "derive_bits"] }
 rand.workspace = true
 serde = { workspace = true, features = ["derive"] }
 halo2curves = { workspace = true, features = ["bits", "derive_serde"] }
