@@ -67,15 +67,29 @@ impl Field for FakeExtension {
     }
 
     fn order() -> BigUint {
-        todo!()
+        Bn254Fr::order()
     }
 
     fn div_2exp_u64(&self, exp: u64) -> Self {
-        todo!()
+        let mut result = *self;
+        for _ in 0..exp {
+            result = result.halve();
+        }
+        result
     }
 
     fn exp_u64_generic<FA: FieldAlgebra<F = Self>>(val: FA, power: u64) -> FA {
-        todo!()
+        let mut result = FA::ONE;
+        let mut base = val;
+        let mut e = power;
+        while e > 0 {
+            if e & 1 == 1 {
+                result *= base;
+            }
+            base *= base;
+            e >>= 1;
+        }
+        result
     }
 
     fn inverse(&self) -> Self {
@@ -91,11 +105,11 @@ impl Field for FakeExtension {
     }
 
     fn multiplicative_group_factors() -> Vec<(BigUint, usize)> {
-        todo!()
+        Bn254Fr::multiplicative_group_factors()
     }
 
     fn bits() -> usize {
-        todo!()
+        Bn254Fr::bits()
     }
 }
 
@@ -103,23 +117,28 @@ impl FieldExtensionAlgebra<Bn254Fr> for FakeExtension {
     const D: usize = 7;
 
     fn from_base(b: Bn254Fr) -> Self {
-        todo!()
+        Self {value: b}
     }
 
     fn from_base_slice(bs: &[Bn254Fr]) -> Self {
-        todo!()
+        let first = bs.first().copied().unwrap_or(Bn254Fr::ZERO);
+        Self { value: first }
     }
 
     fn from_base_fn<F: FnMut(usize) -> Bn254Fr>(f: F) -> Self {
-        todo!()
+        let b0 = f(0);
+        Self { value: b0 }
     }
 
     fn from_base_iter<I: Iterator<Item = Bn254Fr>>(iter: I) -> Self {
-        todo!()
+        match iter.next() {
+            Some(x) => Self { value: x },
+            None => Self::ZERO,
+        }
     }
 
     fn as_base_slice(&self) -> &[Bn254Fr] {
-        todo!()
+        slice::from_ref(&self.value)
     }
 }
 
@@ -127,7 +146,11 @@ impl PrimeField64 for Bn254Fr {
     const ORDER_U64: u64 = 2;
 
     fn as_canonical_u64(&self) -> u64 {
-        todo!()
+        let repr = self.value.to_repr();         // a 32-byte representation
+        let le_bytes = repr.as_ref();            // little-endian by default in halo2curves
+        let mut arr = [0u8; 8];
+        arr.copy_from_slice(&le_bytes[..8]);      // take the first 8 bytes
+        u64::from_le_bytes(arr)
     }
 }
 
@@ -135,15 +158,15 @@ impl ExtensionField<Bn254Fr> for FakeExtension {
     type ExtensionPacking = FakeExtension;
 
     fn is_in_basefield(&self) -> bool {
-        todo!()
+        true
     }
 
     fn as_base(&self) -> Option<Bn254Fr> {
-        todo!()
+        Some(self.value)
     }
 
     fn ext_powers_packed(&self) -> p3_field::Powers<Self::ExtensionPacking> {
-        todo!()
+        Powers::new_geometric(*self)
     }
 }
 
@@ -345,7 +368,9 @@ impl TwoAdicField for FakeExtension {
     const TWO_ADICITY: usize = 27;
 
     fn two_adic_generator(bits: usize) -> Self {
-        todo!()
+        Self {
+            value: Bn254Fr::two_adic_generator(bits),
+        }
     }
 }
 
