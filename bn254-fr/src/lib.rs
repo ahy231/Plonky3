@@ -17,8 +17,8 @@ use ff::{Field as FFField, PrimeField as FFPrimeField};
 pub use halo2curves::bn256::Fr as FFBn254Fr;
 use halo2curves::serde::SerdeObject;
 use p3_field::{
-    ExtensionField, Field, FieldAlgebra, FieldExtensionAlgebra, Packable, PrimeField, PrimeField64,
-    TwoAdicField,
+    ExtensionField, Field, FieldAlgebra, FieldExtensionAlgebra, Packable, PrimeField, PrimeField32,
+    PrimeField64, TwoAdicField,
 };
 pub use poseidon2::Poseidon2Bn254;
 use rand::distributions::{Distribution, Standard};
@@ -71,23 +71,22 @@ impl Field for FakeExtension {
     }
 
     fn div_2exp_u64(&self, exp: u64) -> Self {
-        let mut result = *self;
-        for _ in 0..exp {
-            result = result.halve();
+        FakeExtension {
+            value: self.value.div_2exp_u64(exp),
         }
-        result
     }
 
     fn exp_u64_generic<FA: FieldAlgebra<F = Self>>(val: FA, power: u64) -> FA {
         let mut result = FA::ONE;
-        let mut base = val;
-        let mut e = power;
-        while e > 0 {
-            if e & 1 == 1 {
-                result *= base;
+        let mut current = val;
+        let mut remaining_power = power;
+
+        while remaining_power > 0 {
+            if remaining_power & 1 == 1 {
+                result *= current.clone();
             }
-            base *= base;
-            e >>= 1;
+            current = current.clone() * current;
+            remaining_power >>= 1;
         }
         result
     }
@@ -114,43 +113,37 @@ impl Field for FakeExtension {
 }
 
 impl FieldExtensionAlgebra<Bn254Fr> for FakeExtension {
-    const D: usize = 7;
+    const D: usize = 1;
 
     fn from_base(b: Bn254Fr) -> Self {
-        Self {value: b}
+        FakeExtension { value: b }
     }
 
     fn from_base_slice(bs: &[Bn254Fr]) -> Self {
-        let first = bs.first().copied().unwrap_or(Bn254Fr::ZERO);
-        Self { value: first }
+        assert!(!bs.is_empty());
+        FakeExtension { value: bs[0] }
     }
 
-    fn from_base_fn<F: FnMut(usize) -> Bn254Fr>(f: F) -> Self {
-        let b0 = f(0);
-        Self { value: b0 }
+    fn from_base_fn<F: FnMut(usize) -> Bn254Fr>(mut f: F) -> Self {
+        FakeExtension { value: f(0) }
     }
 
-    fn from_base_iter<I: Iterator<Item = Bn254Fr>>(iter: I) -> Self {
-        match iter.next() {
-            Some(x) => Self { value: x },
-            None => Self::ZERO,
+    fn from_base_iter<I: Iterator<Item = Bn254Fr>>(mut iter: I) -> Self {
+        FakeExtension {
+            value: iter.next().unwrap_or(Bn254Fr::ZERO),
         }
     }
 
     fn as_base_slice(&self) -> &[Bn254Fr] {
-        slice::from_ref(&self.value)
+        std::slice::from_ref(&self.value)
     }
 }
 
 impl PrimeField64 for Bn254Fr {
-    const ORDER_U64: u64 = 2;
+    const ORDER_U64: u64 = 1 << 63;
 
     fn as_canonical_u64(&self) -> u64 {
-        let repr = self.value.to_repr();         // a 32-byte representation
-        let le_bytes = repr.as_ref();            // little-endian by default in halo2curves
-        let mut arr = [0u8; 8];
-        arr.copy_from_slice(&le_bytes[..8]);      // take the first 8 bytes
-        u64::from_le_bytes(arr)
+        u64::from_le_bytes(self.value.to_bytes()[0..8].try_into().unwrap())
     }
 }
 
@@ -166,7 +159,12 @@ impl ExtensionField<Bn254Fr> for FakeExtension {
     }
 
     fn ext_powers_packed(&self) -> p3_field::Powers<Self::ExtensionPacking> {
-        Powers::new_geometric(*self)
+        p3_field::Powers {
+            base: FakeExtension { value: self.value },
+            current: FakeExtension {
+                value: Bn254Fr::ONE,
+            },
+        }
     }
 }
 
@@ -368,7 +366,7 @@ impl TwoAdicField for FakeExtension {
     const TWO_ADICITY: usize = 27;
 
     fn two_adic_generator(bits: usize) -> Self {
-        Self {
+        FakeExtension {
             value: Bn254Fr::two_adic_generator(bits),
         }
     }
