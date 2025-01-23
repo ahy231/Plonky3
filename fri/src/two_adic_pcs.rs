@@ -25,7 +25,7 @@ use tracing::{info_span, instrument};
 use crate::verifier::{self, FriError};
 use crate::{prover, FriConfig, FriGenericConfig, FriProof};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TwoAdicFriPcs<Val, Dft, InputMmcs, FriMmcs> {
     dft: Dft,
     mmcs: InputMmcs,
