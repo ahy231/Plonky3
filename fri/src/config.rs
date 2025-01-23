@@ -4,7 +4,7 @@ use core::fmt::Debug;
 use p3_field::Field;
 use p3_matrix::Matrix;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct FriConfig<M> {
     pub log_blowup: usize,
     // TODO: This parameter and FRI early stopping are not yet implemented in `CirclePcs`.
