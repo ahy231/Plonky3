@@ -37,6 +37,7 @@ pub struct SerializingChallenger32<F, Inner> {
 ///    range (0..1 << log_2(p)). This avoids modulo bias.
 #[derive(Clone, Debug)]
 pub struct SerializingChallenger64<F, Inner> {
+    size: usize,
     inner: Inner,
     _marker: PhantomData<F>,
 }
@@ -153,9 +154,14 @@ where
 impl<F: PrimeField64, Inner: CanObserve<u8>> SerializingChallenger64<F, Inner> {
     pub const fn new(inner: Inner) -> Self {
         Self {
+            size: 0,
             inner,
             _marker: PhantomData,
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
     }
 }
 
@@ -171,6 +177,7 @@ where
 
 impl<F: PrimeField64, Inner: CanObserve<u8>> CanObserve<F> for SerializingChallenger64<F, Inner> {
     fn observe(&mut self, value: F) {
+        self.size += 1;
         self.inner
             .observe_slice(&value.to_unique_u64().to_le_bytes());
     }
@@ -182,6 +189,7 @@ impl<F: PrimeField64, const N: usize, Inner: CanObserve<u8>> CanObserve<Hash<F, 
     fn observe(&mut self, values: Hash<F, u8, N>) {
         for value in values {
             self.inner.observe(value);
+            self.size += 1;
         }
     }
 }
@@ -191,7 +199,9 @@ impl<F: PrimeField64, const N: usize, Inner: CanObserve<u8>> CanObserve<Hash<F, 
 {
     fn observe(&mut self, values: Hash<F, u64, N>) {
         for value in values {
-            self.inner.observe_slice(&value.to_le_bytes());
+            let bytes = value.to_le_bytes();
+            self.inner.observe_slice(&bytes);
+            self.size += bytes.len();
         }
     }
 }
